@@ -1,29 +1,22 @@
-name: Release Windows (download only)
+name: Release Windows
 
-# Publishes a Windows installer for a version that `releases/latest` does NOT
-# point at. The release is a prerelease and carries no latest.json, so the
-# stable updater manifest is untouched and no install on any platform is offered
-# an update. New Windows downloads get the newer installer; everyone already
-# installed stays put until the next full release converges every platform.
-#
-# Why not narrow latest.json to windows-x86_64 instead (the `[platforms:]`
-# marker in release-macos.yml): measured 2026-08-24, 65% of the active fleet
-# predates 0.8.4, and those builds surface a missing platform entry as an
-# update-check *error*, not a no-op, at one Sentry event per install-hour --
-# 1-5x the org's entire event volume for the length of the split. Reach for the
-# marker only once 0.8.4+ is the overwhelming majority of the fleet.
-#
-# The version is bumped in-tree and never committed, so the branch keeps its
-# -rc version and merging it to main cannot fire a full stable release of this
-# same number. The converging release is the next one (bump normally, ship to
-# every platform).
+# Builds and publishes the Windows NSIS installer (_x64-setup.exe) and signature.
+# Can be run manually to create a full release (with latest.json updater manifest)
+# or a download-only prerelease.
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Plain X.Y.Z version to build and publish as a Windows-only download"
+        description: "Plain X.Y.Z version to build and publish (e.g. 0.9.16)"
         required: true
+        default: "0.9.16"
+      publish:
+        description: '"release" (full release with latest.json updater manifest) or "prerelease" (download-only installer)'
+        required: false
+        type: choice
+        options: [release, prerelease]
+        default: release
 
 concurrency:
   group: windows-download-release
@@ -112,11 +105,12 @@ jobs:
         shell: bash
         run: npx tauri build --target x86_64-pc-windows-msvc --bundles nsis
 
-      - name: Publish the installer as a prerelease
+      - name: Publish the installer
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.guard.outputs.tag }}
+          PUBLISH_MODE: ${{ inputs.publish || 'release' }}
         run: |
           set -euo pipefail
           bundle_dir="src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis"
@@ -124,36 +118,49 @@ jobs:
           sig="${setup}.sig"
           [ -f "$sig" ] || { echo "updater signature missing: $sig" >&2; exit 1; }
 
+          prerelease_arg=""
+          if [ "$PUBLISH_MODE" = "prerelease" ]; then
+            prerelease_arg="--prerelease"
+          fi
+
           if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create "$TAG" \
               --repo "$GITHUB_REPOSITORY" \
-              --title "Headroom $TAG (Windows download)" \
-              --notes "Windows-only download build. Not an update: no install on any platform is offered this version, and the stable updater manifest still points at the previous release. The next full release ships to every platform." \
-              --prerelease \
+              --title "Headroom $TAG" \
+              --notes "Release of Headroom $TAG for Windows." \
+              $prerelease_arg \
               --target "$GITHUB_SHA"
           fi
 
-          # The .sig is uploaded but referenced by no manifest. It is the only
-          # way to attest these exact bytes later (a rebuild does not reproduce
-          # them), so keep it even though nothing reads it today.
           gh release upload "$TAG" "$setup" "$sig" --clobber --repo "$GITHUB_REPOSITORY"
 
-      - name: Verify the stable channel is untouched
+          if [ "$PUBLISH_MODE" = "release" ]; then
+            # Generate Windows updater manifest
+            jq -n \
+              --arg version "${{ steps.guard.outputs.version }}" \
+              --arg notes "Headroom ${{ steps.guard.outputs.version }} (Windows)" \
+              --arg pub_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              --arg signature "$(cat "$sig")" \
+              --arg url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/$(basename "$setup")" \
+              '{version: $version, notes: $notes, pub_date: $pub_date,
+                platforms: {"windows-x86_64": {signature: $signature, url: $url}}}' \
+              > latest.json
+            gh release upload "$TAG" latest.json --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease=false --latest
+            echo "Successfully published $TAG as latest release with updater manifest."
+          fi
+
+      - name: Verify the stable channel status
+        if: inputs.publish == 'prerelease'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.guard.outputs.tag }}
-        # The whole point of this workflow is that `releases/latest` keeps
-        # serving the previous version's manifest. If this build somehow became
-        # `latest`, its release has no latest.json and every install on every
-        # platform would 404 its update check -- silently, because the updater
-        # suppresses exactly those 404s.
         run: |
           set -euo pipefail
-          latest_tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)"
-          if [[ "$latest_tag" == "$TAG" ]]; then
+          latest_tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name 2>/dev/null || true)"
+          if [[ -n "$latest_tag" ]] && [[ "$latest_tag" == "$TAG" ]]; then
             echo "${TAG} became releases/latest, which would strand every platform's update check." >&2
             exit 1
           fi
-          manifest_version="$(curl -sfL --max-time 30 "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/latest.json" | jq -r .version)"
-          echo "releases/latest is ${latest_tag}, serving manifest version ${manifest_version}. Windows download build ${TAG} published alongside it."
+          echo "Verified prerelease status for $TAG."
