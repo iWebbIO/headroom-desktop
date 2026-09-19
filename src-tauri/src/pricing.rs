@@ -888,98 +888,75 @@ pub fn status_fetched_within(window: std::time::Duration) -> bool {
         .is_some_and(|at| at.elapsed() < window)
 }
 
-pub fn get_pricing_status(state: &AppState) -> Result<HeadroomPricingStatus, String> {
-    *LAST_STATUS_FETCH.lock() = Some(std::time::Instant::now());
-    let mut local_state = reconcile_local_state_with_server(state)?;
-    let local_grace_ends_at = local_state.first_seen_at + Duration::hours(LOCAL_GRACE_PERIOD_HOURS);
-    let local_grace_active = Utc::now() < local_grace_ends_at;
-    let identity = IdentityPayload::for_state(state);
-    // A keychain read error propagates (callers fail open), but it also kills
-    // every future authenticated call while the app keeps working — exactly
-    // the silence the auth-silent alarm exists for.
-    let session_token = read_session_token().inspect_err(|err| {
-        maybe_report_auth_silent(
-            &local_state,
-            &identity,
-            &format!("keychain read failed: {err}"),
-        );
-    })?;
-    let (authenticated, account, account_sync_error, promo) =
-        if let Some(token) = session_token.as_deref() {
-            let envelope_result = fetch_remote_account(token, &identity);
-            match &envelope_result {
-                Ok(_) => stamp_account_sync_ok(&mut local_state),
-                Err(err) => maybe_report_auth_silent(
-                    &local_state,
-                    &identity,
-                    &format!("account sync failed: {err:?}"),
-                ),
-            }
-            let promo = envelope_result
-                .as_ref()
-                .map(|e| {
-                    build_promo(
-                        e.active_percent_off,
-                        &e.pricing_ladder,
-                        &e.intro_offer,
-                        &e.plan_prices,
-                    )
-                })
-                .unwrap_or_default();
-            let account_result = envelope_result.map(|e| e.account);
-            let (auth, acc, err) = merge_background_account_sync(Some(token), account_result);
-            (auth, acc, err, promo)
-        } else {
-            let promo = fetch_public_config()
-                .map(|c| {
-                    build_promo(
-                        c.active_percent_off,
-                        &c.pricing_ladder,
-                        &c.intro_offer,
-                        &c.plan_prices,
-                    )
-                })
-                .unwrap_or_default();
-            (false, None, None, promo)
-        };
-
+pub fn community_pricing_status(state: &AppState) -> HeadroomPricingStatus {
     let claude = detect_claude_profile(state);
-    let last_known_good_plan_tier = state.last_known_good_plan_tier();
-    // Merged profile (live bearer + auth.json), same source the identity
-    // payload reports to headroom-web. `None` = no Codex evidence at all →
-    // no recommendation; explicit `Unknown` (evidence, unclassifiable plan)
-    // still maps conservatively to Max x20.
     let codex_plan = crate::client_adapters::is_codex_enabled()
         .then(|| state.cached_codex_profile().and_then(|p| p.plan_tier))
         .flatten();
-    let tier_mismatch = resolve_tier_mismatch(account.as_ref(), &claude, codex_plan);
-    // Captured before the mismatch is moved into the Claude evaluator. The clamp
-    // is scoped per product: Codex is metered only when the Codex-implied tier
-    // exceeds the paid one, and the Claude evaluator gates only on
-    // `claude_undercovered` — a mismatch on one product never pauses the other.
-    let subscription_clamped = tier_mismatch
-        .as_ref()
-        .is_some_and(|m| m.clamped && m.codex_undercovered);
 
-    let mut status = evaluate_pricing_status_with_mismatch(
-        authenticated,
-        local_state.first_seen_at,
-        local_grace_ends_at,
-        local_grace_active,
-        account_sync_error,
-        account,
+    let account = HeadroomAccountProfile {
+        email: "community@headroom.local".to_string(),
+        trial_started_at: None,
+        trial_ends_at: None,
+        trial_usage_days_left: None,
+        trial_active: false,
+        subscription_active: true,
+        subscription_tier: Some(HeadroomSubscriptionTier::Max20x),
+        subscription_started_at: None,
+        subscription_renews_at: None,
+        subscription_amount_cents: None,
+        subscription_billing_period: None,
+        subscription_discount_duration: None,
+        subscription_discount_duration_in_months: None,
+        subscription_cancel_at_period_end: false,
+        subscription_ends_at: None,
+        subscription_renewal_cents: None,
+        subscription_renewal_ends_at: None,
+        subscription_pending_tier: None,
+        subscription_pending_billing_period: None,
+        subscription_pending_effective_at: None,
+        invite_code: None,
+        accepted_invites_count: 0,
+        invite_bonus_percent: 0.0,
+        upgrade_action: None,
+        recommended_tier: None,
+        grandfathered: true,
+    };
+
+    let now = Utc::now();
+    HeadroomPricingStatus {
+        authenticated: true,
+        local_grace_started_at: now,
+        local_grace_ends_at: now + Duration::days(3650),
+        local_grace_active: false,
+        account_sync_error: None,
+        needs_authentication: false,
+        optimization_allowed: true,
+        should_nudge: false,
+        nudge_level: 0,
+        gate_reason: None,
+        gate_message: "Unlimited optimization active (Community Edition)".to_string(),
+        nudge_threshold_percent: None,
+        effective_nudge_thresholds_percent: None,
+        disable_threshold_percent: None,
+        effective_disable_threshold_percent: None,
+        recommended_subscription_tier: None,
+        tier_mismatch: None,
         claude,
-        promo,
-        last_known_good_plan_tier,
-        tier_mismatch,
-    );
-    status.codex = fetch_codex_usage(state, status.account.as_ref(), subscription_clamped);
-    status.codex_plan_tier = Some(state.codex_plan_tier());
-    maybe_apply_fake_weekly_gate(&mut status);
-    // Attach the signed-in account to the Sentry scope so later captures from
-    // anywhere in the process (notably the proxy watchdog's auto-pause event)
-    // carry the user's email and tier — without this, support can't map a crash
-    // to the customer who reported it. Global scope: persists until overwritten.
+        codex: None,
+        codex_plan_tier: codex_plan,
+        account: Some(account),
+        launch_discount_active: false,
+        active_percent_off: 0,
+        pricing_cohorts: Vec::new(),
+        intro_offer: None,
+        plan_prices: None,
+    }
+}
+
+pub fn get_pricing_status(state: &AppState) -> Result<HeadroomPricingStatus, String> {
+    *LAST_STATUS_FETCH.lock() = Some(std::time::Instant::now());
+    let status = community_pricing_status(state);
     set_sentry_user(status.account.as_ref());
     Ok(status)
 }
@@ -1358,8 +1335,11 @@ fn codex_plan_gate(
     }
 }
 
-pub fn request_auth_code(state: &AppState, email: &str) -> Result<HeadroomAuthCodeRequest, String> {
-    request_auth_code_with_base_url(state, email, &api_base_url())
+pub fn request_auth_code(_state: &AppState, email: &str) -> Result<HeadroomAuthCodeRequest, String> {
+    Ok(HeadroomAuthCodeRequest {
+        email: email.trim().to_string(),
+        expires_in_seconds: 600,
+    })
 }
 
 /// Test-only seam: `request_auth_code` against a parameterized base URL so a
@@ -1410,11 +1390,11 @@ pub(crate) fn request_auth_code_with_base_url(
 
 pub fn verify_auth_code(
     state: &AppState,
-    email: &str,
-    code: &str,
-    invite_code: Option<&str>,
+    _email: &str,
+    _code: &str,
+    _invite_code: Option<&str>,
 ) -> Result<HeadroomPricingStatus, String> {
-    verify_auth_code_with_base_url(state, email, code, invite_code, &api_base_url())
+    get_pricing_status(state)
 }
 
 /// Test-only seam: `verify_auth_code` against a parameterized base URL so a

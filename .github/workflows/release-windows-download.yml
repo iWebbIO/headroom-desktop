@@ -42,14 +42,11 @@ jobs:
       # The stable endpoint on purpose: a fresh install of this build polls the
       # normal manifest, reads an older version there, and gets a clean no-op
       # (tauri only offers strictly-newer) until the converging release lands.
-      HEADROOM_UPDATER_ENDPOINTS: '["https://github.com/gglucass/headroom-desktop/releases/latest/download/latest.json"]'
-      HEADROOM_UPDATER_STAGING_ENDPOINTS: '["https://github.com/gglucass/headroom-desktop/releases/download/staging-rolling/latest.json"]'
+      HEADROOM_UPDATER_ENDPOINTS: '["https://github.com/${{ github.repository }}/releases/latest/download/latest.json"]'
+      HEADROOM_UPDATER_STAGING_ENDPOINTS: '["https://github.com/${{ github.repository }}/releases/download/staging-rolling/latest.json"]'
       HEADROOM_UPDATER_PUBLIC_KEY: ${{ vars.HEADROOM_UPDATER_PUBLIC_KEY }}
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       HEADROOM_ACCOUNT_API_BASE_URL: ${{ vars.HEADROOM_ACCOUNT_API_BASE_URL }}
       HEADROOM_APTABASE_APP_KEY: ${{ vars.HEADROOM_APTABASE_APP_KEY }}
       VITE_HEADROOM_SALES_CONTACT_URL: ${{ vars.VITE_HEADROOM_SALES_CONTACT_URL }}
@@ -86,13 +83,6 @@ jobs:
             exit 1
           fi
 
-          for key in HEADROOM_UPDATER_PUBLIC_KEY TAURI_SIGNING_PRIVATE_KEY AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET HEADROOM_SENTRY_DSN; do
-            if [[ -z "${!key:-}" ]]; then
-              echo "Missing required secret or variable: ${key}" >&2
-              exit 1
-            fi
-          done
-
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
 
@@ -118,14 +108,8 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Install Azure Artifact Signing CLI
-        run: cargo install artifact-signing-cli --locked
-
       - name: Build NSIS installer
         shell: bash
-        # NSIS only, same as the stable workflow: bundle.targets is "all", which
-        # also builds an MSI nothing publishes. signCommand signs both the inner
-        # .exe and the installer.
         run: npx tauri build --target x86_64-pc-windows-msvc --bundles nsis
 
       - name: Publish the installer as a prerelease

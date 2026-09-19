@@ -38,8 +38,8 @@ jobs:
       package_version: ${{ steps.release_guard.outputs.package_version }}
 
     env:
-      HEADROOM_UPDATER_ENDPOINTS: '["https://github.com/gglucass/headroom-desktop/releases/latest/download/latest.json"]'
-      HEADROOM_UPDATER_STAGING_ENDPOINTS: '["https://github.com/gglucass/headroom-desktop/releases/download/staging-rolling/latest.json"]'
+      HEADROOM_UPDATER_ENDPOINTS: '["https://github.com/${{ github.repository }}/releases/latest/download/latest.json"]'
+      HEADROOM_UPDATER_STAGING_ENDPOINTS: '["https://github.com/${{ github.repository }}/releases/download/staging-rolling/latest.json"]'
       HEADROOM_UPDATER_PUBLIC_KEY: ${{ vars.HEADROOM_UPDATER_PUBLIC_KEY }}
       APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
       APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -131,38 +131,16 @@ jobs:
         if: steps.release_guard.outputs.should_release == 'true'
         shell: bash
         run: |
-          set -euo pipefail
-
-          required=(
-            HEADROOM_ACCOUNT_API_BASE_URL
-            HEADROOM_APTABASE_APP_KEY
-            HEADROOM_UPDATER_PUBLIC_KEY
-            APPLE_CERTIFICATE
-            APPLE_CERTIFICATE_PASSWORD
-            APPLE_SIGNING_IDENTITY
-            TAURI_SIGNING_PRIVATE_KEY
-            TAURI_SIGNING_PRIVATE_KEY_PASSWORD
-            HEADROOM_SENTRY_DSN
-            VITE_SENTRY_DSN
-          )
-
-          for key in "${required[@]}"; do
-            if [[ -z "${!key:-}" ]]; then
-              echo "Missing required secret or variable: $key" >&2
-              exit 1
-            fi
-          done
-
-          if [[ -n "${APPLE_API_ISSUER:-}" && -n "${APPLE_API_KEY:-}" && -n "${APPLE_API_PRIVATE_KEY_P8:-}" ]]; then
-            exit 0
+          echo "Validating release configuration..."
+          if [[ -z "${HEADROOM_UPDATER_PUBLIC_KEY:-}" ]]; then
+            echo "Notice: HEADROOM_UPDATER_PUBLIC_KEY not set in repository variables; using config default."
           fi
-
-          if [[ -n "${APPLE_ID:-}" && -n "${APPLE_PASSWORD:-}" && -n "${APPLE_TEAM_ID:-}" ]]; then
-            exit 0
+          if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
+            echo "Notice: TAURI_SIGNING_PRIVATE_KEY not set in repository secrets; updater artifacts will be unsigned."
           fi
-
-          echo "Configure either App Store Connect notarization secrets or Apple ID notarization secrets." >&2
-          exit 1
+          if [[ -z "${APPLE_CERTIFICATE:-}" ]]; then
+            echo "Notice: APPLE_CERTIFICATE not set; macOS artifacts will be built unsigned."
+          fi
 
       - name: Prepare App Store Connect API key
         if: steps.release_guard.outputs.should_release == 'true' && env.APPLE_API_PRIVATE_KEY_P8 != ''
@@ -224,18 +202,11 @@ jobs:
     env:
       # Same endpoint pair the macOS staging job bakes in, so an rc install
       # follows whichever channel the app is set to.
-      HEADROOM_UPDATER_ENDPOINTS: '["https://github.com/gglucass/headroom-desktop/releases/latest/download/latest.json"]'
-      HEADROOM_UPDATER_STAGING_ENDPOINTS: '["https://github.com/gglucass/headroom-desktop/releases/download/staging-rolling/latest.json"]'
+      HEADROOM_UPDATER_ENDPOINTS: '["https://github.com/${{ github.repository }}/releases/latest/download/latest.json"]'
+      HEADROOM_UPDATER_STAGING_ENDPOINTS: '["https://github.com/${{ github.repository }}/releases/download/staging-rolling/latest.json"]'
       HEADROOM_UPDATER_PUBLIC_KEY: ${{ vars.HEADROOM_UPDATER_PUBLIC_KEY }}
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-      # Authenticode via Azure Artifact Signing. tauri.conf.json's
-      # bundle.windows.signCommand shells out to artifact-signing-cli, which
-      # reads these three. Missing creds fail the build rather than silently
-      # shipping an unsigned installer.
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       HEADROOM_ACCOUNT_API_BASE_URL: ${{ vars.HEADROOM_ACCOUNT_API_BASE_URL }}
       HEADROOM_APTABASE_APP_KEY: ${{ vars.HEADROOM_APTABASE_APP_KEY }}
       VITE_HEADROOM_SALES_CONTACT_URL: ${{ vars.VITE_HEADROOM_SALES_CONTACT_URL }}
@@ -264,9 +235,6 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
-
-      - name: Install Azure Artifact Signing CLI
-        run: cargo install artifact-signing-cli --locked
 
       - name: Build NSIS installer
         shell: bash
@@ -305,8 +273,8 @@ jobs:
     timeout-minutes: 45
 
     env:
-      HEADROOM_UPDATER_ENDPOINTS: '["https://github.com/gglucass/headroom-desktop/releases/latest/download/latest.json"]'
-      HEADROOM_UPDATER_STAGING_ENDPOINTS: '["https://github.com/gglucass/headroom-desktop/releases/download/staging-rolling/latest.json"]'
+      HEADROOM_UPDATER_ENDPOINTS: '["https://github.com/${{ github.repository }}/releases/latest/download/latest.json"]'
+      HEADROOM_UPDATER_STAGING_ENDPOINTS: '["https://github.com/${{ github.repository }}/releases/download/staging-rolling/latest.json"]'
       HEADROOM_UPDATER_PUBLIC_KEY: ${{ vars.HEADROOM_UPDATER_PUBLIC_KEY }}
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}

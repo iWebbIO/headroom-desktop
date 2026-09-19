@@ -2,15 +2,15 @@
 
 **Headroom is a desktop tray app for macOS, Windows, and Linux that cuts [Claude Code](https://www.anthropic.com/claude-code) and [ChatGPT / Codex](https://openai.com/codex/) token costs by ~50% - without changing how you code.** It also routes [OpenCode](https://opencode.ai) and Grok Build through the same pipeline. It runs a local-first optimization pipeline that reversibly compresses the tool output, logs, and boilerplate that bloat every prompt, so the AI plan you already pay for stretches about 2x further. Nothing the model needs is lost - it can pull the original content back on demand.
 
-> **Paid product.** Headroom is a paid subscription app (7-day free trial, no credit card required; plans from $4/mo, or $3/mo billed annually) - see [pricing](https://extraheadroom.com/pricing). The desktop shell in this repo is MIT-licensed and open source, but the app requires a Headroom account and an active plan to run.
+> **Community Edition / Standalone Fork.** This fork of Headroom Desktop runs 100% offline and standalone without requiring an account login, server telemetry, or subscription plan. Prompt optimization is permanently enabled with full access.
 
-[![Website](https://img.shields.io/badge/extraheadroom.com-website-blue?style=for-the-badge)](https://extraheadroom.com)&nbsp;&nbsp;[![Download](https://img.shields.io/github/v/release/gglucass/headroom-desktop?label=Download&style=for-the-badge&color=000000)](https://github.com/gglucass/headroom-desktop/releases/latest)
+[![GitHub Repo](https://img.shields.io/badge/iWebbIO%2Fheadroom--desktop-repo-blue?style=for-the-badge)](https://github.com/iWebbIO/headroom-desktop)&nbsp;&nbsp;[![Download](https://img.shields.io/github/v/release/iWebbIO/headroom-desktop?label=Download&style=for-the-badge&color=000000)](https://github.com/iWebbIO/headroom-desktop/releases/latest)
 
 > **macOS:** 14 (Sonoma) or later, Apple Silicon or Intel (universal build)
 >
 > **Windows:** Windows 10 or later, x64
 >
-> **Linux:** x86_64, glibc 2.39 or newer (Ubuntu 24.04, Debian 13), plus a running secret-service keyring provider (gnome-keyring or kwallet) for sign-in
+> **Linux:** x86_64, glibc 2.39 or newer (Ubuntu 24.04, Debian 13)
 
 ### Install
 
@@ -22,13 +22,16 @@ brew install --cask headroom
 
 **Option B - manual download:**
 
-1. Go to the [latest release](https://github.com/gglucass/headroom-desktop/releases/latest)
+1. Go to the [latest release](https://github.com/iWebbIO/headroom-desktop/releases/latest)
 2. **macOS:** download the `.dmg` (for example `Headroom_0.9.3_mac.dmg`), open it, drag **Headroom** to Applications
 3. **Windows:** download and run the `_x64-setup.exe` installer
 4. **Linux:** download the `.AppImage` (has the built-in updater) or the `.deb` (same build, updates only by downloading a newer one)
 5. Launch Headroom - it appears in your menu bar / system tray and walks you through setup
 
-Headroom is signed and notarized on macOS, so it opens without Gatekeeper warnings. All install paths self-update via the app's built-in updater; the Homebrew cask stays current with each release too.
+> **Note on code signing:** Self-built/fork releases run without commercial Apple Developer ID or Azure Authenticode certificates:
+> - **macOS:** If Gatekeeper warns that the app cannot be opened, right-click (or Control-click) **Headroom.app** in Finder and choose **Open**, or run `xattr -cr /Applications/Headroom.app`.
+> - **Windows:** Click **More info** → **Run anyway** if Windows SmartScreen prompts.
+> - **Auto-updater:** Configured to update from `iWebbIO/headroom-desktop` releases using Tauri's built-in Minisign Ed25519 updater.
 
 Every stable release ships all three platforms from the same tag. The Linux runtime installs a proxy-focused subset of the Python stack, so the memory and ML extras that the macOS and Windows builds ship are absent there.
 
@@ -97,7 +100,7 @@ Full disclosure of every location Headroom writes to, so you can decide before i
 - For OpenCode, points the anthropic and openai provider base URLs in OpenCode's config at the local proxy and installs a small transport plugin. A backup is written before any edit.
 - For Grok Build, adds a `GROK_CLI_CHAT_PROXY_BASE_URL` export to the managed shell block.
 - Creates `~/Library/Application Support/Headroom` for logs, caches, and per-client setup state.
-- Stores your Headroom session token in the macOS Keychain (Windows Credential Manager / Linux secret-service on those platforms) under services prefixed `com.extraheadroom.headroom`.
+- If configured from upstream, stores session token in macOS Keychain / Windows Credential Manager / Linux secret-service (unused in this fork since auth is offline).
 - If you opt into "launch at login," installs a LaunchAgent plist at `~/Library/LaunchAgents/`. Never added otherwise.
 - Adds a managed block to your shell profile (`.zshrc`, `.zprofile`, etc.) that prepends Headroom's managed `bin` directory (under `~/Library/Application Support/Headroom`) to `PATH` so `rtk` is available in your terminals. Every managed block is fenced with `# >>> headroom:... >>>` markers and can be removed by hand if you prefer.
 
@@ -232,17 +235,13 @@ npm install
 npm run tauri dev
 ```
 
-For the live auth and pricing flow, create a `.env`:
+Optional environment variables can be provided via `.env` (auth and pricing are fully offline and unlocked by default in this fork):
 
 ```bash
-HEADROOM_ACCOUNT_API_BASE_URL="https://extraheadroom.com/api/v1"
-HEADROOM_APTABASE_APP_KEY="REPLACE_WITH_APTABASE_APP_KEY"
-VITE_SENTRY_DSN="REPLACE_WITH_SENTRY_DSN"
-VITE_HEADROOM_SALES_CONTACT_URL="mailto:hello@extraheadroom.com"
-VITE_HEADROOM_CONTACT_FORM_URL="https://extraheadroom.com/contact_request"
+# Optional telemetry/crash reporting overrides (all empty by default)
+VITE_SENTRY_DSN=""
+HEADROOM_SENTRY_DSN=""
 ```
-
-See [`.env.example`](.env.example) for the complete list, including the optional updater and macOS signing keys used for release builds. Set the same keys as GitHub Actions repository variables for production DMG builds.
 
 Run tests:
 

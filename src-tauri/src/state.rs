@@ -42,10 +42,10 @@ pub const MAX_UPGRADE_AUTO_RETRIES: u32 = 2;
 /// BUMP THIS whenever the terms on extraheadroom.com/terms change: a release
 /// shipping a higher value forces every user to re-accept on first launch,
 /// because their locally-stored `accepted_terms_version` will be lower.
-pub const REQUIRED_TERMS_VERSION: u32 = 1;
+pub const REQUIRED_TERMS_VERSION: u32 = 0;
 
-/// Canonical Terms-of-Service URL opened from the acceptance gate.
-pub const TERMS_URL: &str = "https://extraheadroom.com/terms";
+/// Canonical Terms-of-Service / project repository URL.
+pub const TERMS_URL: &str = "https://github.com/iWebbIO/headroom-desktop";
 
 /// Absolute maximum time we'll wait for the new proxy to come up during
 /// boot validation, regardless of observed activity. Bounded so an
@@ -2769,7 +2769,7 @@ impl AppState {
                 clients,
                 recent_usage,
                 required_terms_version: REQUIRED_TERMS_VERSION,
-                accepted_terms_version,
+                accepted_terms_version: accepted_terms_version.max(REQUIRED_TERMS_VERSION),
                 terms_url: TERMS_URL.to_string(),
             },
             pending_milestones,

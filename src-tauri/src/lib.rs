@@ -78,9 +78,9 @@ const UPDATER_PUBLIC_KEY: Option<&str> = option_env!("HEADROOM_UPDATER_PUBLIC_KE
 const UPDATER_ENDPOINTS: Option<&str> = option_env!("HEADROOM_UPDATER_ENDPOINTS");
 const UPDATER_STAGING_ENDPOINTS: Option<&str> = option_env!("HEADROOM_UPDATER_STAGING_ENDPOINTS");
 const SENTRY_DSN: Option<&str> = option_env!("HEADROOM_SENTRY_DSN");
-const DEFAULT_UPDATER_PUBLIC_KEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk3QkUyNEU0MjVBMkRDM0MKUldRODNLSWw1Q1MrbC93MitlYTVoUXViSXJQNGVQWDdBRXA0Qkl4WGtpSEttNm5YTDB3QWtncEoK";
+const DEFAULT_UPDATER_PUBLIC_KEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEVDQTY5NzNGRjRGRjgwRQpSV1FPK0UvL2MybktEcW9pQ2hUclN5OENWV2dFbmkxci9HUGxLZDUzaDhyQkpDalVUZTBWL1RoSgo=";
 const DEFAULT_UPDATER_ENDPOINT: &str =
-    "https://github.com/gglucass/headroom-desktop/releases/latest/download/latest.json";
+    "https://github.com/iWebbIO/headroom-desktop/releases/latest/download/latest.json";
 /// Cadence of the background pricing loop. It only fetches when nothing
 /// else (the webview poll, a deep link) has in the last interval, so a
 /// healthy app adds no backend load; a stalled webview still gets a
@@ -10085,7 +10085,7 @@ mod tests {
         assert_eq!(config.endpoints.len(), 1);
         assert_eq!(
             config.endpoints[0].as_str(),
-            "https://github.com/gglucass/headroom-desktop/releases/latest/download/latest.json"
+            "https://github.com/iWebbIO/headroom-desktop/releases/latest/download/latest.json"
         );
     }
 

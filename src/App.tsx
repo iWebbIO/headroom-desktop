@@ -5898,7 +5898,7 @@ export default function App() {
           <p className="paywall__footnote">
             <button
               className="link-button"
-              onClick={() => void invoke("open_external_link", { url: "https://extraheadroom.com/features" })}
+              onClick={() => void invoke("open_external_link", { url: "https://github.com/iWebbIO/headroom-desktop" })}
               type="button"
             >
               See all Headroom features
@@ -6655,13 +6655,6 @@ export default function App() {
           ))}
         </nav>
         <div className="tray-sidebar__footer">
-          <button
-            className={`upgrade-pill${activeView === "upgrade" || activeView === "upgradeAuth" ? " is-active" : ""}`}
-            onMouseDown={() => setActiveView("upgrade")}
-            type="button"
-          >
-            Upgrade
-          </button>
           <button
             className={`tray-nav__item${activeView === "settings" ? " is-active" : ""}`}
             onMouseDown={() => setActiveView("settings")}
@@ -7814,39 +7807,9 @@ export default function App() {
               <article className="soft-card panel-card settings-account-card">
                 <div className="settings-account-row">
                   <p className="settings-account-copy">
-                    Headroom account:{" "}
-                    {pricingStatus?.authenticated ? (
-                      <>
-                        {accountDisplayEmail} <em>({accountPlanName})</em>
-                      </>
-                    ) : (
-                      <em>not signed in</em>
-                    )}
+                    Headroom account: <em>Full Access (Community Edition)</em>
                   </p>
-                  {pricingStatus?.authenticated ? (
-                    <button
-                      className="secondary-button secondary-button--small"
-                      onClick={() => void handleSignOutHeadroomAccount()}
-                      type="button"
-                    >
-                      <SignOut size={16} weight="bold" />
-                      Sign out
-                    </button>
-                  ) : (
-                    <button
-                      className="secondary-button secondary-button--small"
-                      onClick={() => openUpgradeAuthView()}
-                      type="button"
-                    >
-                      Sign in
-                    </button>
-                  )}
                 </div>
-                {pricingStatus?.claude?.profileFetchError ? (
-                  <p className="settings-account-notice">
-                    {pricingStatus.claude.profileFetchError}
-                  </p>
-                ) : null}
               </article>
 
               <article className="soft-card panel-card">
@@ -8170,10 +8133,10 @@ export default function App() {
 
               <button
                 className="contact-link"
-                onClick={() => void invoke("open_external_link", { url: "mailto:support@extraheadroom.com" })}
+                onClick={() => void invoke("open_external_link", { url: "https://github.com/iWebbIO/headroom-desktop/issues" })}
                 type="button"
               >
-                Contact us
+                Project & Support
               </button>
 <button
                 className="quit-button"
