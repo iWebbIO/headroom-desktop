@@ -135,15 +135,26 @@ jobs:
           gh release upload "$TAG" "$setup" "$sig" --clobber --repo "$GITHUB_REPOSITORY"
 
           if [ "$PUBLISH_MODE" = "release" ]; then
-            # Generate Windows updater manifest
+            # Merge, never replace: the same tag's manifest may already carry
+            # linux-x86_64 / linux-x86_64-deb / darwin entries from "Release App".
+            # A windows-only manifest here would strand every non-Windows
+            # install's update check.
+            if gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+                 --pattern latest.json --output-file existing-latest.json 2>/dev/null; then
+              existing_platforms="$(jq '.platforms // {}' existing-latest.json)"
+            else
+              existing_platforms="{}"
+            fi
+
             jq -n \
               --arg version "${{ steps.guard.outputs.version }}" \
               --arg notes "Headroom ${{ steps.guard.outputs.version }} (Windows)" \
               --arg pub_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
               --arg signature "$(cat "$sig")" \
               --arg url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/$(basename "$setup")" \
+              --argjson existing_platforms "$existing_platforms" \
               '{version: $version, notes: $notes, pub_date: $pub_date,
-                platforms: {"windows-x86_64": {signature: $signature, url: $url}}}' \
+                platforms: ($existing_platforms + {"windows-x86_64": {signature: $signature, url: $url}})}' \
               > latest.json
             gh release upload "$TAG" latest.json --clobber --repo "$GITHUB_REPOSITORY"
             gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease=false --latest
